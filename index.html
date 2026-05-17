@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stein — Setness Consulting</title>
+  <meta name="description" content="Stein is a personal financial operations tool by Setness Consulting for secure bank data connectivity and reconciliation." />
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --text: #e8eef4;
+      --muted: #9aa8b8;
+      --accent: #3d9a6f;
+      --border: #2a3544;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
+    .badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      padding: 0.25rem 0.5rem;
+      margin-bottom: 1rem;
+    }
+    h1 { font-size: 2rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .tagline { color: var(--muted); font-size: 1.05rem; margin-bottom: 2rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; }
+    .card p { color: var(--muted); font-size: 0.95rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    footer {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <p class="badge">Setness Consulting</p>
+    <h1>Stein</h1>
+    <p class="tagline">Personal financial operations and bank data reconciliation.</p>
+
+    <section class="card">
+      <h2>About</h2>
+      <p>
+        Stein is operated by Setness Consulting for authorized personal use. It connects
+        to financial institutions through Plaid to retrieve account and transaction data
+        for reconciliation, audit feeds, and financial analysis. Data is not sold to third parties.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Contact</h2>
+      <p>
+        Privacy and security inquiries:<br />
+        <a href="mailto:andrewsetness@gmail.com">andrewsetness@gmail.com</a>
+      </p>
+    </section>
+
+    <footer>
+      <p>
+        <a href="privacy.html">Privacy Policy</a>
+        &nbsp;·&nbsp;
+        &copy; <span id="y"></span> Setness Consulting
+      </p>
+    </footer>
+  </main>
+  <script>document.getElementById("y").textContent = new Date().getFullYear();</script>
+</body>
+</html>
