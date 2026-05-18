@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stein — Connect Bank (Plaid Link)</title>
+  <style>
+    :root { --bg:#0f1419; --surface:#1a2332; --text:#e8eef4; --accent:#3d9a6f; --border:#2a3544; --warn:#e5b567; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 2rem; }
+    .wrap { max-width: 620px; margin: 0 auto; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
+    button { background: var(--accent); color: white; border: none; padding: 0.7rem 1.4rem; border-radius: 6px; font-size: 1rem; cursor: pointer; }
+    .note { font-size: 0.9rem; color: #9aa8b8; }
+    .warn { color: var(--warn); font-size: 0.9rem; margin-bottom: 1rem; }
+    input { width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border); background: #0b0f14; color: var(--text); margin: 0.5rem 0; }
+    code { background: #0b0f14; padding: 0.1rem 0.3rem; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Stein — Connect Bank</h1>
+    <p class="note">Production • Transactions + Statements (Balance included automatically)</p>
+    <p class="warn" id="origin-warn"></p>
+
+    <div class="card">
+      <h2>1. Get a link token</h2>
+      <p>Run from the <code>Brain</code> folder:</p>
+      <pre><code>python QuickBooks/scripts/plaid_create_link_token.py --print-json</code></pre>
+    </div>
+
+    <div class="card">
+      <h2>2. Paste link token and launch Link</h2>
+      <input id="token" placeholder="Paste link_token here" />
+      <button type="button" id="launch-btn">Launch Plaid Link</button>
+    </div>
+
+    <div class="card">
+      <h2>After success</h2>
+      <pre><code>python QuickBooks/scripts/plaid_exchange_public_token.py --public-token "PUBLIC_TOKEN" --write-state</code></pre>
+    </div>
+  </div>
+
+  <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+  <script>
+    const REDIRECT_URI = 'https://andrewsetness.github.io/stein/oauth.html';
+    const HOSTED_CONNECT = 'https://andrewsetness.github.io/stein/connect.html';
+    let handler = null;
+
+    // #region agent log
+    function dbg(hypothesisId, location, message, data) {
+      fetch('http://127.0.0.1:7781/ingest/0cb96179-2073-4ebf-bdb7-b583b226c191', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '499e95' },
+        body: JSON.stringify({
+          sessionId: '499e95',
+          hypothesisId,
+          location,
+          message,
+          data: data || {},
+          timestamp: Date.now(),
+          runId: 'pre-fix',
+        }),
+      }).catch(function () {});
+    }
+    // #endregion
+
+    function isHostedOrigin() {
+      return window.location.origin === 'https://andrewsetness.github.io';
+    }
+
+    function restoreTokenFromHash() {
+      if (!window.location.hash || window.location.hash.length < 2) return false;
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      const token = params.get('link_token');
+      if (!token) return false;
+      sessionStorage.setItem('plaid_link_token', token);
+      document.getElementById('token').value = token;
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      dbg('A', 'connect.html:restoreTokenFromHash', 'restored token from hash into sessionStorage', {
+        hosted: isHostedOrigin(),
+        tokenPresent: true,
+      });
+      return true;
+    }
+
+    function launchLink() {
+      const token = document.getElementById('token').value.trim();
+      if (!token) {
+        alert('Please paste a link_token first.');
+        return;
+      }
+
+      dbg('A', 'connect.html:launchLink', 'launch clicked', {
+        protocol: window.location.protocol,
+        origin: window.location.origin,
+        hosted: isHostedOrigin(),
+        redirectUri: REDIRECT_URI,
+      });
+
+      if (!isHostedOrigin()) {
+        dbg('A', 'connect.html:launchLink', 'redirecting file/local to hosted connect', {
+          target: HOSTED_CONNECT,
+        });
+        window.location.href = HOSTED_CONNECT + '?auto=1#link_token=' + encodeURIComponent(token);
+        return;
+      }
+
+      sessionStorage.setItem('plaid_link_token', token);
+      dbg('B', 'connect.html:launchLink', 'stored link_token in sessionStorage', {
+        storageKey: 'plaid_link_token',
+        hasValue: !!sessionStorage.getItem('plaid_link_token'),
+      });
+
+      handler = Plaid.create({
+        token: token,
+        redirect_uri: REDIRECT_URI,
+        onSuccess: function (public_token, metadata) {
+          dbg('E', 'connect.html:onSuccess', 'link success on connect page', {
+            institution: metadata && metadata.institution ? metadata.institution.name : null,
+          });
+          alert('Success! Public token received. Copy from alert or oauth return page.');
+          sessionStorage.removeItem('plaid_link_token');
+        },
+        onExit: function (err, metadata) {
+          dbg('C', 'connect.html:onExit', 'link exit', {
+            error_type: err && err.error_type,
+            error_code: err && err.error_code,
+            error_message: err && err.error_message,
+            status: metadata && metadata.status,
+            link_session_id: metadata && metadata.link_session_id,
+          });
+          if (err) {
+            alert('Plaid Link error: ' + (err.display_message || err.error_message || err.error_code || 'unknown'));
+          }
+        },
+        onEvent: function (eventName, metadata) {
+          if (eventName === 'ERROR' || eventName === 'EXIT') {
+            dbg('C', 'connect.html:onEvent', eventName, {
+              error_code: metadata && metadata.error_code,
+              error_message: metadata && metadata.error_message,
+            });
+          }
+        },
+      });
+
+      handler.open();
+    }
+
+    document.getElementById('launch-btn').addEventListener('click', launchLink);
+
+    (function init() {
+      const warn = document.getElementById('origin-warn');
+      if (!isHostedOrigin()) {
+        warn.textContent = 'You are not on the hosted connect page. Launch will redirect to ' + HOSTED_CONNECT + ' so OAuth can complete (file:// cannot finish OAuth).';
+      } else {
+        warn.textContent = 'Hosted connect page — OAuth return will share sessionStorage with oauth.html.';
+      }
+
+      dbg('A', 'connect.html:init', 'page load', {
+        href: window.location.href.split('?')[0],
+        protocol: window.location.protocol,
+        origin: window.location.origin,
+        hosted: isHostedOrigin(),
+        hasStoredToken: !!sessionStorage.getItem('plaid_link_token'),
+      });
+
+      restoreTokenFromHash();
+      if (new URLSearchParams(window.location.search).get('auto') === '1' && document.getElementById('token').value.trim()) {
+        dbg('A', 'connect.html:init', 'auto-launch after redirect', {});
+        launchLink();
+      }
+    })();
+  </script>
+</body>
+</html>
