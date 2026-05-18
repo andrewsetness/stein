@@ -10,7 +10,7 @@ From this folder:
 
 ```bash
 git init
-git add index.html privacy.html README.md
+git add index.html privacy.html oauth.html README.md
 git commit -m "Add Stein public site for Plaid compliance"
 gh repo create stein --public --source=. --remote=origin --push
 gh api repos/andrewsetness/stein/pages -X POST -f build_type=legacy -f source[branch]=main -f source[path]=/
@@ -22,3 +22,4 @@ Or enable Pages in GitHub: **Settings → Pages → Deploy from branch `main` / 
 
 - **Website URL:** `https://andrewsetness.github.io/stein/`
 - **Privacy policy:** `https://andrewsetness.github.io/stein/privacy.html`
+- **Plaid OAuth return:** `https://andrewsetness.github.io/stein/oauth.html` (for Wells Fargo and other OAuth institutions)

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stein — Plaid OAuth Return</title>
+  <meta name="description" content="Complete Plaid Link OAuth flow for Stein." />
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --text: #e8eef4;
+      --muted: #9aa8b8;
+      --accent: #3d9a6f;
+      --border: #2a3544;
+      --error: #e57373;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
+    .badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      padding: 0.25rem 0.5rem;
+      margin-bottom: 1rem;
+    }
+    h1 { font-size: 1.75rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .status { font-size: 0.95rem; color: var(--muted); margin-bottom: 1rem; }
+    .success { color: var(--accent); }
+    .error { color: var(--error); }
+    .token-box {
+      background: #0b0f14;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.85rem;
+      word-break: break-all;
+      margin: 1rem 0;
+    }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.2rem;
+      font-size: 0.95rem;
+      cursor: pointer;
+      margin-top: 0.5rem;
+    }
+    button:hover { opacity: 0.9; }
+    .instructions {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-top: 1rem;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    footer {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <p class="badge">Stein</p>
+    <h1>Plaid Link — OAuth Return</h1>
+    <div id="status" class="status">Waiting for Plaid Link...</div>
+
+    <div id="result" class="card" style="display:none;">
+      <h2>Link successful</h2>
+      <p class="success">Public token received. Copy it and exchange below.</p>
+
+      <div class="token-box" id="token-box"></div>
+
+      <button onclick="copyToken()">Copy public_token</button>
+
+      <div class="instructions">
+        In your terminal (from <code>Brain</code> folder):
+        <br>
+        <code>python QuickBooks/scripts/plaid_exchange_public_token.py --public-token "PUBLIC_TOKEN_HERE" --write-state</code>
+        <br><br>
+        Then run sync:
+        <br>
+        <code>python QuickBooks/scripts/plaid_sync_transactions.py --mode bootstrap --write-csv --write-state</code>
+      </div>
+    </div>
+
+    <div id="error-box" class="card" style="display:none;">
+      <h2>Error</h2>
+      <p id="error-text" class="error"></p>
+      <p><a href="index.html">Back to Stein</a></p>
+    </div>
+
+    <footer>
+      <p>
+        <a href="index.html">Stein</a> &nbsp;·&nbsp;
+        <a href="privacy.html">Privacy</a>
+      </p>
+    </footer>
+  </main>
+
+  <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+  <script>
+    function copyToken() {
+      const token = document.getElementById('token-box').textContent.trim();
+      navigator.clipboard.writeText(token).then(() => {
+        const btns = document.querySelectorAll('button');
+        if (btns.length) btns[0].textContent = 'Copied!';
+        setTimeout(() => { if (btns.length) btns[0].textContent = 'Copy public_token'; }, 1500);
+      });
+    }
+
+    function showError(msg) {
+      document.getElementById('status').style.display = 'none';
+      document.getElementById('error-box').style.display = 'block';
+      document.getElementById('error-text').textContent = msg;
+    }
+
+    function showSuccess(publicToken) {
+      document.getElementById('status').style.display = 'none';
+      const result = document.getElementById('result');
+      result.style.display = 'block';
+      document.getElementById('token-box').textContent = publicToken;
+    }
+
+    // Main OAuth handler
+    (function init() {
+      const url = window.location.href;
+
+      // If this page was opened as OAuth return, it will have oauth_state_id param
+      if (!url.includes('oauth_state_id=')) {
+        document.getElementById('status').innerHTML = 'This page is for Plaid OAuth return only.<br>Start Link from a connect page.';
+        return;
+      }
+
+      // Try to get link token from sessionStorage (set by the originating connect page)
+      const linkToken = sessionStorage.getItem('plaid_link_token');
+
+      if (!linkToken) {
+        showError('Missing link token. Please start the Link flow again from the connect page (token is stored in sessionStorage).');
+        return;
+      }
+
+      document.getElementById('status').innerHTML = 'Completing Plaid Link OAuth...';
+
+      const handler = Plaid.create({
+        token: linkToken,
+        receivedRedirectUri: url,
+        onSuccess: function(public_token, metadata) {
+          // Success! Show the token and instructions
+          showSuccess(public_token);
+          // Clear the token from storage
+          sessionStorage.removeItem('plaid_link_token');
+        },
+        onExit: function(err, metadata) {
+          if (err) {
+            showError('Link exited with error: ' + (err.error_message || err.error_code || 'unknown'));
+          } else {
+            showError('Link exited. You can close this tab and return to the connect page.');
+          }
+        }
+      });
+
+      // Automatically open the handler to finish the OAuth flow
+      handler.open();
+    })();
+  </script>
+</body>
+</html>
