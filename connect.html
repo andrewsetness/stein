@@ -46,20 +46,39 @@
     const HOSTED_CONNECT = 'https://andrewsetness.github.io/stein/connect.html';
     let handler = null;
 
+    const TOKEN_KEY = 'plaid_link_token';
+    const DEBUG_KEY = 'plaid_debug_log';
+
+    function persistLinkToken(token) {
+      sessionStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(TOKEN_KEY, token);
+      document.cookie = TOKEN_KEY + '=' + encodeURIComponent(token) + '; path=/stein/; max-age=7200; SameSite=Lax; Secure';
+    }
+
+    function clearLinkToken() {
+      sessionStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(TOKEN_KEY);
+      document.cookie = TOKEN_KEY + '=; path=/stein/; max-age=0; SameSite=Lax; Secure';
+    }
+
     // #region agent log
     function dbg(hypothesisId, location, message, data) {
+      const entry = {
+        sessionId: '499e95',
+        hypothesisId: hypothesisId,
+        location: location,
+        message: message,
+        data: data || {},
+        timestamp: Date.now(),
+        runId: 'post-fix',
+      };
+      const logs = JSON.parse(localStorage.getItem(DEBUG_KEY) || '[]');
+      logs.push(entry);
+      localStorage.setItem(DEBUG_KEY, JSON.stringify(logs.slice(-30)));
       fetch('http://127.0.0.1:7781/ingest/0cb96179-2073-4ebf-bdb7-b583b226c191', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '499e95' },
-        body: JSON.stringify({
-          sessionId: '499e95',
-          hypothesisId,
-          location,
-          message,
-          data: data || {},
-          timestamp: Date.now(),
-          runId: 'pre-fix',
-        }),
+        body: JSON.stringify(entry),
       }).catch(function () {});
     }
     // #endregion
@@ -73,7 +92,7 @@
       const params = new URLSearchParams(window.location.hash.slice(1));
       const token = params.get('link_token');
       if (!token) return false;
-      sessionStorage.setItem('plaid_link_token', token);
+      persistLinkToken(token);
       document.getElementById('token').value = token;
       history.replaceState(null, '', window.location.pathname + window.location.search);
       dbg('A', 'connect.html:restoreTokenFromHash', 'restored token from hash into sessionStorage', {
@@ -105,10 +124,11 @@
         return;
       }
 
-      sessionStorage.setItem('plaid_link_token', token);
-      dbg('B', 'connect.html:launchLink', 'stored link_token in sessionStorage', {
-        storageKey: 'plaid_link_token',
-        hasValue: !!sessionStorage.getItem('plaid_link_token'),
+      persistLinkToken(token);
+      dbg('B', 'connect.html:launchLink', 'stored link_token (session+local+cookie)', {
+        session: !!sessionStorage.getItem(TOKEN_KEY),
+        local: !!localStorage.getItem(TOKEN_KEY),
+        cookie: document.cookie.indexOf(TOKEN_KEY + '=') >= 0,
       });
 
       handler = Plaid.create({
@@ -119,7 +139,7 @@
             institution: metadata && metadata.institution ? metadata.institution.name : null,
           });
           alert('Success! Public token received. Copy from alert or oauth return page.');
-          sessionStorage.removeItem('plaid_link_token');
+          clearLinkToken();
         },
         onExit: function (err, metadata) {
           dbg('C', 'connect.html:onExit', 'link exit', {
