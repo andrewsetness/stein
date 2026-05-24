@@ -184,6 +184,14 @@
         hasStoredToken: !!sessionStorage.getItem('plaid_link_token'),
       });
 
+      const qsToken = new URLSearchParams(window.location.search).get('link_token');
+      if (qsToken) {
+        persistLinkToken(qsToken);
+        document.getElementById('token').value = qsToken;
+        history.replaceState(null, '', window.location.pathname);
+        dbg('B', 'connect.html:init', 'link_token from query string', { hosted: isHostedOrigin() });
+      }
+
       restoreTokenFromHash();
       if (new URLSearchParams(window.location.search).get('auto') === '1' && document.getElementById('token').value.trim()) {
         dbg('A', 'connect.html:init', 'auto-launch after redirect', {});

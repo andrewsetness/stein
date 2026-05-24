@@ -112,6 +112,11 @@
     <div id="error-box" class="card" style="display:none;">
       <h2>Error</h2>
       <p id="error-text" class="error"></p>
+      <div id="recovery" style="display:none; margin-top:1rem;">
+        <p class="status">Paste the <strong>same</strong> link_token you used on connect, then click Complete OAuth:</p>
+        <input id="recovery-token" type="text" placeholder="link-production-..." style="width:100%;padding:0.5rem;margin:0.5rem 0;" />
+        <button type="button" id="recovery-btn">Complete OAuth</button>
+      </div>
       <pre id="debug-log" class="token-box" style="display:none; font-size:11px; max-height:200px; overflow:auto;"></pre>
       <p><a href="connect.html">Try connect again</a> &nbsp;·&nbsp; <a href="index.html">Back to Stein</a></p>
     </div>
@@ -153,16 +158,68 @@
       document.cookie = TOKEN_KEY + '=; path=/stein/; max-age=0; SameSite=Lax; Secure';
     }
 
-    function showError(msg) {
+    function showError(msg, showRecovery) {
       document.getElementById('status').style.display = 'none';
       document.getElementById('error-box').style.display = 'block';
       document.getElementById('error-text').textContent = msg;
+      if (showRecovery) {
+        document.getElementById('recovery').style.display = 'block';
+      }
       const raw = localStorage.getItem(DEBUG_KEY);
       const debugEl = document.getElementById('debug-log');
       if (raw && debugEl) {
         debugEl.style.display = 'block';
         debugEl.textContent = raw;
       }
+    }
+
+    function persistLinkToken(token) {
+      sessionStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(TOKEN_KEY, token);
+      document.cookie = TOKEN_KEY + '=' + encodeURIComponent(token) + '; path=/stein/; max-age=7200; SameSite=Lax; Secure';
+    }
+
+    function openPlaidOAuth(linkToken) {
+      const url = window.location.href;
+      document.getElementById('status').innerHTML = 'Completing Plaid Link OAuth...';
+      dbg('B', 'oauth.html:openPlaidOAuth', 'opening handler', {
+        tokenPresent: !!linkToken,
+        receivedRedirectUri: url,
+      });
+      const handler = Plaid.create({
+        token: linkToken,
+        receivedRedirectUri: window.location.href,
+        onSuccess: function(public_token, metadata) {
+          dbg('E', 'oauth.html:onSuccess', 'oauth complete', {
+            institution: metadata && metadata.institution ? metadata.institution.name : null,
+          });
+          document.getElementById('error-box').style.display = 'none';
+          showSuccess(public_token);
+          clearLinkToken();
+        },
+        onExit: function(err, metadata) {
+          dbg('C', 'oauth.html:onExit', 'link exit on oauth page', {
+            error_type: err && err.error_type,
+            error_code: err && err.error_code,
+            error_message: err && err.error_message,
+            status: metadata && metadata.status,
+          });
+          if (err) {
+            showError('Link exited with error: ' + (err.display_message || err.error_message || err.error_code || 'unknown'), true);
+          } else {
+            showError('Link exited. You can close this tab and return to the connect page.', false);
+          }
+        },
+        onEvent: function(eventName, metadata) {
+          if (eventName === 'ERROR' || eventName === 'EXIT') {
+            dbg('C', 'oauth.html:onEvent', eventName, {
+              error_code: metadata && metadata.error_code,
+              error_message: metadata && metadata.error_message,
+            });
+          }
+        },
+      });
+      handler.open();
     }
 
     function showSuccess(publicToken) {
@@ -219,51 +276,19 @@
           origin: window.location.origin,
         });
         showError(
-          'Missing link token. Open https://andrewsetness.github.io/stein/connect.html, paste a fresh link_token, launch Link again (same browser tab). Do not use file://.'
+          'Missing link token after bank redirect. Paste the same link_token below (from connect) and click Complete OAuth.',
+          true
         );
+        document.getElementById('recovery-btn').onclick = function () {
+          const t = document.getElementById('recovery-token').value.trim();
+          if (!t) return;
+          persistLinkToken(t);
+          openPlaidOAuth(t);
+        };
         return;
       }
 
-      document.getElementById('status').innerHTML = 'Completing Plaid Link OAuth...';
-      dbg('B', 'oauth.html:init', 'opening Plaid with receivedRedirectUri', {
-        tokenPresent: true,
-        redirectUriLength: url.length,
-      });
-
-      const handler = Plaid.create({
-        token: linkToken,
-        receivedRedirectUri: window.location.href,
-        onSuccess: function(public_token, metadata) {
-          dbg('E', 'oauth.html:onSuccess', 'oauth complete', {
-            institution: metadata && metadata.institution ? metadata.institution.name : null,
-          });
-          showSuccess(public_token);
-          clearLinkToken();
-        },
-        onExit: function(err, metadata) {
-          dbg('C', 'oauth.html:onExit', 'link exit on oauth page', {
-            error_type: err && err.error_type,
-            error_code: err && err.error_code,
-            error_message: err && err.error_message,
-            status: metadata && metadata.status,
-          });
-          if (err) {
-            showError('Link exited with error: ' + (err.display_message || err.error_message || err.error_code || 'unknown'));
-          } else {
-            showError('Link exited. You can close this tab and return to the connect page.');
-          }
-        },
-        onEvent: function(eventName, metadata) {
-          if (eventName === 'ERROR' || eventName === 'EXIT') {
-            dbg('C', 'oauth.html:onEvent', eventName, {
-              error_code: metadata && metadata.error_code,
-              error_message: metadata && metadata.error_message,
-            });
-          }
-        },
-      });
-
-      handler.open();
+      openPlaidOAuth(linkToken);
     })();
   </script>
 </body>
