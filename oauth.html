@@ -232,7 +232,7 @@
 
       const handler = Plaid.create({
         token: linkToken,
-        receivedRedirectUri: url.split('#')[0],
+        receivedRedirectUri: window.location.href,
         onSuccess: function(public_token, metadata) {
           dbg('E', 'oauth.html:onSuccess', 'oauth complete', {
             institution: metadata && metadata.institution ? metadata.institution.name : null,
