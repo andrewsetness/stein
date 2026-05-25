@@ -137,9 +137,19 @@
         onSuccess: function (public_token, metadata) {
           dbg('E', 'connect.html:onSuccess', 'link success on connect page', {
             institution: metadata && metadata.institution ? metadata.institution.name : null,
+            public_token: public_token,
           });
-          alert('Success! Public token received. Copy from alert or oauth return page.');
+          localStorage.setItem('plaid_public_token', public_token);
+          prompt('Link succeeded! Copy your public_token below:', public_token);
           clearLinkToken();
+          var resultDiv = document.createElement('div');
+          resultDiv.className = 'card';
+          resultDiv.innerHTML = '<h2>Success!</h2>' +
+            '<p>Institution: ' + (metadata && metadata.institution ? metadata.institution.name : 'unknown') + '</p>' +
+            '<p><strong>Public token:</strong></p>' +
+            '<input id="public-token-result" value="' + public_token + '" readonly onclick="this.select()" />' +
+            '<p class="note">Select and copy the token above, then run the exchange command.</p>';
+          document.querySelector('.wrap').appendChild(resultDiv);
         },
         onExit: function (err, metadata) {
           dbg('C', 'connect.html:onExit', 'link exit', {
